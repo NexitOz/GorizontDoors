@@ -1,0 +1,24 @@
+{
+  "browser": "153.0.8010.0",
+  "date": "2026-10-07T07:33:11.433Z",
+  "initialBytes": 417446,
+  "checks": [
+    "Initial load below 3 MB, sound off, cover alone",
+    "Avers/Revers actual WebGL scenes open independently",
+    "Angle and selected profile survive page changes",
+    "Hinge hand and lock detail, native focus and Escape",
+    "Unpaired last internal page and contacts are shown alone",
+    "All 11 entries in the contents panel",
+    "All 11 mobile pages, real HTML and no horizontal overflow",
+    "Real touch input swipe changes the mobile page",
+    "Dragging inside a door scene never flips the magazine",
+    "Keyboard range control has priority over page navigation",
+    "Sound begins only on explicit request and can be stopped",
+    "Reduced motion avoids 3D page flipping",
+    "WebGL fallback keeps meaningful controls and text",
+    "Control frames for four opening/hinge combinations at 30/60/85 degrees",
+    "Mouse edge drag and keyboard navigation with video evidence"
+  ],
+  "errors": [],
+  "warnings": []
+}
