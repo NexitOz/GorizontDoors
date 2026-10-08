@@ -1,11 +1,13 @@
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { addHandles, addMagneticLock, addStrike } from './hardware';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import type { Finish, HingeSide, OpeningMode } from '../../catalog/data';
 import { finishColors, demoGeometry } from '../../catalog/data';
 import { signedRotation } from '../../core/door';
 
 export type SceneOptions = { mode: OpeningMode; hinge: HingeSide; finish: Finish; profile: string; double?: boolean; exploded?: number };
-export type SceneView = 'room' | 'lock' | 'hinge';
+export type SceneView = 'room' | 'edge' | 'lock' | 'handle' | 'hinge';
 export function createDoorScene(host: HTMLElement, options: SceneOptions) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#d7d0c3');
@@ -23,7 +25,7 @@ export function createDoorScene(host: HTMLElement, options: SceneOptions) {
   const environmentScene = new RoomEnvironment();
   const environment = pmrem.fromScene(environmentScene);
   scene.environment = environment.texture;
-  scene.environmentIntensity = 0.35;
+  scene.environmentIntensity = 0.6;
   environmentScene.dispose(); pmrem.dispose();
   const textures: THREE.Texture[] = [];
   function texture(kind: 'stone' | 'wood' | 'floor') {
@@ -47,8 +49,13 @@ export function createDoorScene(host: HTMLElement, options: SceneOptions) {
   const plaster = new THREE.MeshStandardMaterial({ color: '#e0d8ca', roughness: 0.93, map: stoneTexture });
   const floorMat = new THREE.MeshStandardMaterial({ color: '#c9c0b0', roughness: 0.78, map: texture('floor') });
   const profileMat = new THREE.MeshStandardMaterial({ color: options.profile, metalness: 0.65, roughness: 0.42 });
+  const edgeMat = new THREE.MeshStandardMaterial({ color: options.profile, metalness: 0.72, roughness: 0.3 });
   const metal = new THREE.MeshStandardMaterial({ color: '#242825', metalness: 0.6, roughness: 0.32 });
-  const satin = new THREE.MeshStandardMaterial({ color: '#8c918e', metalness: 0.8, roughness: 0.3 });
+  const satin = new THREE.MeshPhysicalMaterial({ color: '#c3c7c9', metalness: 0.9, roughness: 0.27, anisotropy: 0.35, envMapIntensity: 1.5 });
+  const polished = new THREE.MeshStandardMaterial({ color: '#d3d6d6', metalness: 0.92, roughness: 0.2, envMapIntensity: 1.5 });
+  const recess = new THREE.MeshStandardMaterial({ color: '#191c1d', roughness: 0.8 });
+  const rosette = new THREE.MeshStandardMaterial({ color: '#ccd2d5', metalness: 0.58, roughness: 0.32, envMapIntensity: 1.3 });
+  const metals = { satin, polished, recess, rosette };
   const dark = new THREE.MeshStandardMaterial({ color: '#34342d', roughness: 0.8 });
   const warm = new THREE.MeshStandardMaterial({ color: '#9a7857', map: woodTexture, roughness: 0.75 });
   const leafMat = new THREE.MeshStandardMaterial({ color: finishColors[options.finish], roughness: 0.82, map: stoneTexture });
@@ -64,7 +71,8 @@ export function createDoorScene(host: HTMLElement, options: SceneOptions) {
   light.shadow.camera.top = 4; light.shadow.camera.bottom = -2; light.shadow.camera.near = 0.5; light.shadow.camera.far = 12;
   light.shadow.normalBias = 0.015; light.shadow.bias = -0.0004; light.shadow.radius = 3; scene.add(light);
   const backLight = new THREE.PointLight('#ffd49a', 9, 5, 2); backLight.position.set(0.4, 2.5, -1.7); scene.add(backLight);
-  const floor = box(scene, [7, 0.06, 7], [0, -0.04, -0.7], floorMat);
+  const room = new THREE.Group(); scene.add(room);
+  const floor = box(room, [7, 0.06, 7], [0, -0.04, -0.7], floorMat);
   floor.receiveShadow = true;
   const fullWidth = options.double ? 1.45 : demoGeometry.width;
   const height = demoGeometry.height, gap = 0.008, opening = fullWidth + gap * 2;
@@ -77,31 +85,31 @@ export function createDoorScene(host: HTMLElement, options: SceneOptions) {
   box(frame, [0.008, height + 0.02, 0.095], [opening / 2 - 0.004, height / 2 + 0.008, -0.048], profileMat);
   box(frame, [opening, 0.008, 0.095], [0, height + 0.012, -0.048], profileMat);
   // An actual room behind the opening. No duplicate closed leaf in the background.
-  box(scene, [5.5, 3.0, 0.1], [0, 1.5, -2.7], plaster);
-  box(scene, [0.1, 3, 2.5], [-2, 1.5, -1.6], plaster);
-  box(scene, [1.15, 0.28, 0.65], [0.4, 0.25, -1.8], plaster);
-  box(scene, [1.15, 0.42, 0.15], [0.4, 0.53, -2.04], plaster);
-  box(scene, [0.95, 0.018, 0.95], [0.0, 0.01, -1.1], new THREE.MeshStandardMaterial({ color: '#ac9e84', roughness: 1 }));
+  box(room, [5.5, 3.0, 0.1], [0, 1.5, -2.7], plaster);
+  box(room, [0.1, 3, 2.5], [-2, 1.5, -1.6], plaster);
+  box(room, [1.15, 0.28, 0.65], [0.4, 0.25, -1.8], plaster);
+  box(room, [1.15, 0.42, 0.15], [0.4, 0.53, -2.04], plaster);
+  box(room, [0.95, 0.018, 0.95], [0.0, 0.01, -1.1], new THREE.MeshStandardMaterial({ color: '#ac9e84', roughness: 1 }));
   // Architectural shelf and console, out of the leaf swing envelope.
-  box(scene, [0.58, 2.95, 0.11], [1.8, 1.48, 0.035], dark);
+  box(room, [0.58, 2.95, 0.11], [1.8, 1.48, 0.035], dark);
   for (const y of [0.5, 1.06, 1.65, 2.24]) {
-    box(scene, [0.58, 0.025, 0.19], [1.8, y, 0.11], dark);
-    box(scene, [0.45, 0.007, 0.02], [1.8, y - 0.018, 0.16], glow);
-    for (let i = 0; i < 4; i++) box(scene, [0.036, 0.21 + (i % 2) * 0.055, 0.08], [1.65 + i * 0.055, y + 0.13, 0.105], i % 2 ? plaster : warm);
+    box(room, [0.58, 0.025, 0.19], [1.8, y, 0.11], dark);
+    box(room, [0.45, 0.007, 0.02], [1.8, y - 0.018, 0.16], glow);
+    for (let i = 0; i < 4; i++) box(room, [0.036, 0.21 + (i % 2) * 0.055, 0.08], [1.65 + i * 0.055, y + 0.13, 0.105], i % 2 ? plaster : warm);
   }
-  box(scene, [0.72, 0.055, 0.33], [-1.7, 0.67, 0.13], dark);
-  for (let i = 0; i < 13; i++) box(scene, [0.019, 0.63, 0.04], [-2.01 + i * 0.05, 0.32, 0.12], warm);
+  box(room, [0.72, 0.055, 0.33], [-1.7, 0.67, 0.13], dark);
+  for (let i = 0; i < 13; i++) box(room, [0.019, 0.63, 0.04], [-2.01 + i * 0.05, 0.32, 0.12], warm);
   const vase = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.085, 0.28, 16), dark);
-  vase.position.set(-1.83, 0.84, 0.13); scene.add(vase);
+  vase.position.set(-1.83, 0.84, 0.13); room.add(vase);
   for (let i = 0; i < 7; i++) {
     const points = [new THREE.Vector3(-1.83, 0.92, 0.13), new THREE.Vector3(-1.83 + (i - 3) * 0.045, 1.42 + (i % 3) * 0.1, 0.1)];
-    scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineBasicMaterial({ color: '#605a3e' })));
+    room.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineBasicMaterial({ color: '#605a3e' })));
   }
   // Back-room vertical accents.
-  for (let i = 0; i < 14; i++) box(scene, [0.018, 2.4, 0.025], [-0.1 + i * 0.055, 1.4, -2.63], warm);
-  box(scene, [0.85, 0.014, 0.025], [0.26, 2.65, -2.6], glow);
+  for (let i = 0; i < 14; i++) box(room, [0.018, 2.4, 0.025], [-0.1 + i * 0.055, 1.4, -2.63], warm);
+  box(room, [0.85, 0.014, 0.025], [0.26, 2.65, -2.6], glow);
 
-  const doors: { pivot: THREE.Group; handles: THREE.Group[]; hinge: HingeSide; width: number; latch: THREE.Mesh; body: THREE.Mesh; lockX: number }[] = [];
+  const doors: { pivot: THREE.Group; handles: THREE.Group[]; hinge: HingeSide; width: number; latch: THREE.Mesh | undefined; body: THREE.Mesh; lockX: number }[] = [];
   const hits: THREE.Object3D[] = [];
   const dimension = options.mode === 'revers' ? demoGeometry.reversThickness : demoGeometry.aversThickness;
   function leaf(width: number, hinge: HingeSide, hingeX: number) {
@@ -110,25 +118,16 @@ export function createDoorScene(host: HTMLElement, options: SceneOptions) {
     pivot.position.set(hingeX, 0, options.mode === 'avers' ? 0 : -dimension);
     scene.add(pivot);
     const centreZ = options.mode === 'avers' ? -dimension / 2 : dimension / 2;
-    const body = box(pivot, [width - 0.003, height, dimension], [handed * width / 2, height / 2 + 0.008, centreZ], leafMat);
-    const edgeX = handed * (width - 0.003);
-    box(pivot, [0.003, height, dimension], [edgeX, height / 2 + 0.008, centreZ], profileMat);
+    // Side faces carry the selected aluminium colour; no buried coplanar overlay.
+    const body = new THREE.Mesh(new RoundedBoxGeometry(width - 0.003, height, dimension, 2, 0.0008),
+      [edgeMat, edgeMat, edgeMat, edgeMat, leafMat, leafMat]);
+    body.position.set(handed * width / 2, height / 2 + 0.008, centreZ);
+    body.castShadow = body.receiveShadow = true; pivot.add(body);
+    const edgeX = handed * (width - 0.0015);
     const lockX = handed * (width - 0.075);
-    const handles: THREE.Group[] = [];
-    for (const front of [true, false]) {
-      const faceZ = centreZ + (front ? 1 : -1) * (dimension / 2 + 0.002);
-      const assembly = new THREE.Group(); assembly.position.set(lockX, 1.0, faceZ); pivot.add(assembly); handles.push(assembly);
-      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.009, 20), metal);
-      base.rotation.x = Math.PI / 2; assembly.add(base);
-      const bar = box(assembly, [0.115, 0.011, 0.017], [-handed * 0.05, 0, front ? 0.025 : -0.025], metal);
-      hits.push(bar);
-    }
-    box(pivot, [0.004, 0.19, dimension * 0.75], [edgeX + handed * 0.002, 1.0, centreZ], satin);
-    const latch = box(pivot, [0.004, 0.022, 0.024], [edgeX + handed * 0.005, 1.03, centreZ], metal);
-    for (const y of [0.92, 1.08]) {
-      const screw = new THREE.Mesh(new THREE.CylinderGeometry(0.0028, 0.0028, 0.006, 8), metal);
-      screw.rotation.z = Math.PI / 2; screw.position.set(edgeX + handed * 0.005, y, centreZ); pivot.add(screw);
-    }
+    const hardware = addHandles(pivot, lockX, centreZ, dimension, handed, metals);
+    const handles = hardware.moving; hits.push(...hardware.hits);
+    const latch = !options.double || hinge === 'left' ? addMagneticLock(pivot, edgeX, centreZ, handed, metals) : undefined;
     const hinges = new THREE.Group(); pivot.add(hinges);
     // Recessed illustrative linkage, not a claimed CAD model of a manufacturer's hinge.
     for (const y of [0.35, 1.84]) {
@@ -137,13 +136,16 @@ export function createDoorScene(host: HTMLElement, options: SceneOptions) {
       box(frame, [0.007, 0.092, dimension * 0.65], [hingeX - handed * 0.005, y, -dimension / 2], satin);
     }
     // Strike stays attached to the frame, opposite the hinge.
-    box(frame, [0.005, 0.17, dimension * 0.75], [hingeX + handed * (width + 0.004), 1.0, -dimension / 2], satin);
+    if (!options.double) addStrike(frame, [hingeX + handed * (width + 0.004), 1, -dimension / 2], handed, metals);
     doors.push({ pivot, handles, hinge, width, latch, body, lockX });
     hits.push(body);
   }
   if (options.double) {
     leaf(fullWidth / 2 - 0.003, 'left', -fullWidth / 2);
     leaf(fullWidth / 2 - 0.003, 'right', fullWidth / 2);
+    // The centre strike belongs to the passive leaf, never to a floating frame.
+    const passive = doors[1];
+    addStrike(passive.pivot, [-(passive.width - 0.0015), 1, options.mode === 'avers' ? -dimension / 2 : dimension / 2], 1, metals);
   } else leaf(fullWidth, options.hinge, options.hinge === 'left' ? -fullWidth / 2 : fullWidth / 2);
 
   let view: SceneView = 'room';
@@ -156,6 +158,7 @@ export function createDoorScene(host: HTMLElement, options: SceneOptions) {
       camera.lookAt(-0.04, 1.16, -0.22);
     }
     camera.updateProjectionMatrix();
+    if (view !== 'room') setView(view, false);
   }
   const resizeObserver = new ResizeObserver(() => { resize(); render(); }); resizeObserver.observe(host);
   let expensiveFrames = 0, simplified = false;
@@ -172,31 +175,46 @@ export function createDoorScene(host: HTMLElement, options: SceneOptions) {
   function update(angle: number, handlePressed: boolean, secondAngle = angle) {
     doors.forEach((door, index) => {
       door.pivot.rotation.y = signedRotation(index === 1 ? secondAngle : angle, options.mode, door.hinge);
-      for (const handle of door.handles) handle.rotation.z = handlePressed ? (door.hinge === 'left' ? -0.2 : 0.2) : 0;
-      door.latch.visible = angle < 0.5 && !handlePressed;
+      // Only the lever pivots. The mounting rosette remains fixed on the leaf.
+      for (const handle of door.handles) handle.rotation.z = handlePressed ? -0.22 : 0;
+      if (door.latch) door.latch.position.z = (index === 1 ? secondAngle : angle) < 0.5 && !handlePressed ? 0.0027 : -0.001;
     });
     setView(view, false);
     render();
   }
   function setView(next: SceneView, redraw = true) {
     view = next;
-    const door = doors[0];
+    room.visible = wall.visible = view === 'room';
+    const door = doors[0], handed = door.hinge === 'left' ? 1 : -1;
     if (view === 'room') resize();
     else {
       scene.updateMatrixWorld(true);
-      const localEdgeX = view === 'lock' ? (door.hinge === 'left' ? door.width : -door.width) : 0;
-      const edge = new THREE.Vector3(localEdgeX, view === 'lock' ? 1.02 : 1.84, -dimension / 2);
-      door.pivot.localToWorld(edge);
-      const outward = new THREE.Vector3(door.hinge === 'left' ? 1 : -1, 0, 0).applyQuaternion(door.pivot.quaternion);
-      camera.position.copy(edge).addScaledVector(outward, view === 'lock' ? 0.44 : -0.5);
-      camera.position.y += 0.07;
-      camera.position.z += 0.14;
-      camera.lookAt(edge); camera.updateProjectionMatrix();
+      const centreZ = options.mode === 'avers' ? -dimension / 2 : dimension / 2;
+      const edge = door.pivot.localToWorld(new THREE.Vector3(handed * (door.width - 0.0015), view === 'hinge' ? 1.84 : view === 'edge' ? 1.11 : 1.0, centreZ));
+      const outward = new THREE.Vector3(handed, 0, 0).applyQuaternion(door.pivot.quaternion);
+      const front = new THREE.Vector3(0, 0, 1).applyQuaternion(door.pivot.quaternion);
+      const target = edge.clone();
+      if (view === 'lock') {
+        target.addScaledVector(outward, -0.032);
+        camera.position.copy(edge).addScaledVector(outward, 0.23).addScaledVector(front, 0.26); camera.position.y += 0.06;
+      } else if (view === 'handle') {
+        const base = door.pivot.localToWorld(new THREE.Vector3(door.lockX, 1, centreZ + dimension / 2));
+        target.copy(base).addScaledVector(outward, -0.05).addScaledVector(front, 0.026);
+        camera.position.copy(base).addScaledVector(outward, 0.10).addScaledVector(front, 0.30); camera.position.y += 0.04;
+      } else if (view === 'edge') {
+        target.addScaledVector(outward, -0.13);
+        const distance = Math.max(3.6, 2.6 / camera.aspect);
+        camera.position.copy(edge).addScaledVector(outward, distance * 0.86).addScaledVector(front, distance * 0.5);
+      } else {
+        target.copy(door.pivot.localToWorld(new THREE.Vector3(handed * 0.006, 1.84, centreZ)));
+        camera.position.copy(target).addScaledVector(outward, -0.34).addScaledVector(front, 0.24); camera.position.y += 0.06;
+      }
+      camera.lookAt(target); camera.updateProjectionMatrix();
     }
     if (redraw) render();
   }
   function setMaterial(finish: Finish, profile: string) {
-    profileMat.color.set(profile); leafMat.color.set(finishColors[finish]);
+    profileMat.color.set(profile); edgeMat.color.set(profile); leafMat.color.set(finishColors[finish]);
     leafMat.map = finish === 'wood' ? woodTexture : finish === 'mirror' ? null : stoneTexture;
     leafMat.roughness = finish === 'mirror' ? 0.055 : finish === 'wood' ? 0.68 : 0.82;
     leafMat.metalness = finish === 'mirror' ? 1 : 0;

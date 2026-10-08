@@ -30,3 +30,9 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 .book-stage,.catalog-page{touch-action:pan-y pinch-zoom}.page-edge{touch-action:none}
 .detail-canvas{position:relative}
+
+.detail-tabs{display:flex;flex-wrap:wrap;gap:7px;margin:-5px 0 16px}
+.detail-tabs button{min-height:40px;padding:8px 13px;font-size:11px;border:1px solid #c2b89c;border-radius:2px}
+.detail-tabs button[aria-pressed=true]{background:#e7ddc7;border-color:#a48755;color:#766039}
+.door-modal .microcopy{margin:16px 0 0;font-size:11px;line-height:1.65}
+@media(max-width:767px){.detail-tabs{gap:5px}.detail-tabs button{min-height:44px;padding:7px 11px}.door-details{justify-content:flex-start;gap:4px 16px}}

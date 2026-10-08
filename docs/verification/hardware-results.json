@@ -1,0 +1,30 @@
+{
+  "date": "2026-10-08T08:45:35.084Z",
+  "browser": "153.0.8010.12",
+  "checks": [
+    "avers left ALU BLACK: lock/handle/edge, angles 0/60/85",
+    "avers left GOLD: lock/handle/edge, angles 0/60/85",
+    "avers right GOLD: lock/handle/edge, angles 0/60/85",
+    "revers left ALU BLACK: lock/handle/edge, angles 0/60/85",
+    "revers left GOLD BRASH: lock/handle/edge, angles 0/60/85",
+    "revers right GOLD BRASH: lock/handle/edge, angles 0/60/85",
+    "Fallback: selected edge colour, detailed lock and handle, tab switching"
+  ],
+  "errors": [],
+  "reviewFrames": [
+    "hardware-avers-lock-left-gold.jpg",
+    "hardware-avers-lock-left-alu-black.jpg",
+    "hardware-avers-handle-left.jpg",
+    "hardware-avers-edge-gold.jpg",
+    "hardware-revers-lock-right-gold-brash.jpg"
+  ],
+  "unitTests": {
+    "passed": 10,
+    "failed": 0
+  },
+  "baselineBrowserChecks": {
+    "passed": 15,
+    "errors": []
+  },
+  "doubleLeaf": "Both angle controls exercised after final strike attachment change"
+}
