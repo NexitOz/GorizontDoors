@@ -110,3 +110,47 @@ export function addStrike(parent: THREE.Object3D, at: [number, number, number], 
   strike.rotation.y = -handed * Math.PI / 2; parent.add(strike);
   strike.name = 'fixed-strike-plate'; facePlate(strike, 0.118, metals); return strike;
 }
+
+// Two mortised leaves and articulated links; dimensions are illustrative, in metres.
+export function addConcealedHinge(scene: THREE.Scene, frame: THREE.Group, leaf: THREE.Group, y: number, centreZ: number, frameZ: number, handed: number, metals: Metals) {
+  const fixed = new THREE.Group(), moving = new THREE.Group(), linkage = new THREE.Group();
+  fixed.position.set(leaf.position.x - handed * 0.0045, y, frameZ);
+  fixed.rotation.y = handed * Math.PI / 2; frame.add(fixed);
+  moving.position.set(handed * 0.0003, y, centreZ);
+  moving.rotation.y = -handed * Math.PI / 2; leaf.add(moving);
+  scene.add(linkage); linkage.name = 'articulated-concealed-hinge';
+  for (const mount of [fixed, moving]) {
+    const shape = roundedPath(0.027, 0.15, 0.0135);
+    shape.holes.push(roundedPath(0.022, 0.059, 0.002));
+    mesh(mount, new THREE.ExtrudeGeometry(shape, { depth: 0.0015, bevelEnabled: true, bevelSize: 0.00025, bevelThickness: 0.00025, bevelSegments: 2, curveSegments: 16 }), metals.satin);
+    roundedBox(mount, [0.024, 0.062, 0.010], [0, 0, -0.005], metals.recess, 0.002);
+    for (const sy of [-0.055, 0.055]) screw(mount, sy, metals);
+    // A pivot barrel lies in each dark mortise, underneath the rounded covers.
+    const pin = mesh(mount, new THREE.CylinderGeometry(0.004, 0.004, 0.056, 24), metals.polished);
+    pin.position.z = 0.002;
+  }
+  const links: { object: THREE.Mesh; level: number; side: number }[] = [];
+  for (const level of [-0.022, 0, 0.022]) for (const side of [0, 1]) {
+    const object = roundedBox(linkage, [1, 0.013, 0.010], [0, 0, 0], metals.satin, 0.003);
+    links.push({ object, level, side });
+  }
+  const knuckle = mesh(linkage, new THREE.CylinderGeometry(0.006, 0.006, 0.061, 24), metals.polished);
+  const start = new THREE.Vector3(), end = new THREE.Vector3(), elbow = new THREE.Vector3();
+  function update() {
+    scene.updateMatrixWorld(true);
+    fixed.getWorldPosition(start); moving.getWorldPosition(end);
+    const spread = Math.min(1, Math.abs(leaf.rotation.y) / (Math.PI / 2));
+    elbow.copy(start).lerp(end, 0.5);
+    elbow.x += handed * 0.014 * spread;
+    elbow.z += (leaf.rotation.y * handed > 0 ? -1 : 1) * 0.023 * spread;
+    knuckle.position.copy(elbow);
+    for (const { object, level, side } of links) {
+      const a = side ? elbow : start, b = side ? end : elbow;
+      object.position.copy(a).lerp(b, 0.5); object.position.y += level;
+      object.scale.x = Math.max(0.001, a.distanceTo(b));
+      object.rotation.y = -Math.atan2(b.z - a.z, b.x - a.x);
+    }
+    linkage.visible = Math.abs(leaf.rotation.y) > 0.035;
+  }
+  return { update };
+}

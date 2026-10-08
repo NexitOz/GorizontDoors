@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { addHandles, addMagneticLock, addStrike } from './hardware';
+import { addHandles, addMagneticLock, addStrike, addConcealedHinge } from './hardware';
+import { Reflector } from 'three/addons/objects/Reflector.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import type { Finish, HingeSide, OpeningMode } from '../../catalog/data';
 import { finishColors, demoGeometry } from '../../catalog/data';
@@ -50,7 +51,6 @@ export function createDoorScene(host: HTMLElement, options: SceneOptions) {
   const floorMat = new THREE.MeshStandardMaterial({ color: '#c9c0b0', roughness: 0.78, map: texture('floor') });
   const profileMat = new THREE.MeshStandardMaterial({ color: options.profile, metalness: 0.65, roughness: 0.42 });
   const edgeMat = new THREE.MeshStandardMaterial({ color: options.profile, metalness: 0.72, roughness: 0.3 });
-  const metal = new THREE.MeshStandardMaterial({ color: '#242825', metalness: 0.6, roughness: 0.32 });
   const satin = new THREE.MeshPhysicalMaterial({ color: '#c3c7c9', metalness: 0.9, roughness: 0.27, anisotropy: 0.35, envMapIntensity: 1.5 });
   const polished = new THREE.MeshStandardMaterial({ color: '#d3d6d6', metalness: 0.92, roughness: 0.2, envMapIntensity: 1.5 });
   const recess = new THREE.MeshStandardMaterial({ color: '#191c1d', roughness: 0.8 });
@@ -109,6 +109,22 @@ export function createDoorScene(host: HTMLElement, options: SceneOptions) {
   for (let i = 0; i < 14; i++) box(room, [0.018, 2.4, 0.025], [-0.1 + i * 0.055, 1.4, -2.63], warm);
   box(room, [0.85, 0.014, 0.025], [0.26, 2.65, -2.6], glow);
 
+  const mirrors: Reflector[] = [];
+  const hingeMechanisms: ReturnType<typeof addConcealedHinge>[] = [];
+  let mirrored = options.finish === 'mirror';
+  // Furnish the viewer's side too: this is what a closed mirror actually sees.
+  box(room, [7, 3.2, 0.1], [0, 1.6, 3.4], plaster);
+  box(room, [0.1, 3.2, 6], [-3.1, 1.6, 0.3], plaster);
+  box(room, [0.1, 3.2, 6], [3.1, 1.6, 0.3], plaster);
+  const windowMat = new THREE.MeshBasicMaterial({ color: '#e5eff3' });
+  box(room, [1.4, 1.65, 0.025], [-0.65, 1.86, 3.33], dark);
+  box(room, [1.30, 1.55, 0.028], [-0.65, 1.86, 3.31], windowMat);
+  box(room, [0.035, 1.55, 0.04], [-0.65, 1.86, 3.28], dark);
+  box(room, [1.3, 0.035, 0.04], [-0.65, 1.86, 3.28], dark);
+  box(room, [1.45, 0.07, 0.40], [1.35, 0.76, 3.05], warm);
+  for (const x of [0.75, 1.95]) box(room, [0.045, 0.72, 0.045], [x, 0.38, 3.05], dark);
+  box(room, [0.46, 0.66, 0.028], [1.36, 1.53, 3.31], dark);
+  box(room, [0.39, 0.59, 0.03], [1.36, 1.53, 3.29], warm);
   const doors: { pivot: THREE.Group; handles: THREE.Group[]; hinge: HingeSide; width: number; latch: THREE.Mesh | undefined; body: THREE.Mesh; lockX: number }[] = [];
   const hits: THREE.Object3D[] = [];
   const dimension = options.mode === 'revers' ? demoGeometry.reversThickness : demoGeometry.aversThickness;
@@ -128,12 +144,22 @@ export function createDoorScene(host: HTMLElement, options: SceneOptions) {
     const hardware = addHandles(pivot, lockX, centreZ, dimension, handed, metals);
     const handles = hardware.moving; hits.push(...hardware.hits);
     const latch = !options.double || hinge === 'left' ? addMagneticLock(pivot, edgeX, centreZ, handed, metals) : undefined;
-    const hinges = new THREE.Group(); pivot.add(hinges);
-    // Recessed illustrative linkage, not a claimed CAD model of a manufacturer's hinge.
-    for (const y of [0.35, 1.84]) {
-      box(hinges, [0.007, 0.092, dimension * 0.65], [handed * 0.003, y, centreZ], satin);
-      box(hinges, [0.019, 0.045, 0.012], [handed * 0.014, y, centreZ], metal);
-      box(frame, [0.007, 0.092, dimension * 0.65], [hingeX - handed * 0.005, y, -dimension / 2], satin);
+    for (const y of [0.35, 1.84]) hingeMechanisms.push(addConcealedHinge(scene, frame, pivot, y, centreZ, -dimension / 2, handed, metals));
+    // A planar reflection renders the actual room from the reflected camera.
+    for (const front of [true, false]) {
+      const mirror = new Reflector(new THREE.PlaneGeometry(width - 0.005, height - 0.004), {
+        color: '#f2f4f5', textureWidth: 512, textureHeight: 1024, clipBias: 0.003,
+      });
+      mirror.position.set(handed * width / 2, height / 2 + 0.008, centreZ + (front ? 1 : -1) * (dimension / 2 + 0.0005));
+      if (!front) mirror.rotation.y = Math.PI;
+      mirror.visible = mirrored; mirror.name = 'room-reflecting-mirror'; pivot.add(mirror); mirrors.push(mirror);
+      const reflect = mirror.onBeforeRender;
+      mirror.onBeforeRender = function (...args) {
+        const visibility = mirrors.map(other => other.visible);
+        for (const other of mirrors) if (other !== mirror) other.visible = false;
+        try { reflect.apply(this, args); }
+        finally { mirrors.forEach((other, i) => { other.visible = visibility[i]; }); }
+      };
     }
     // Strike stays attached to the frame, opposite the hinge.
     if (!options.double) addStrike(frame, [hingeX + handed * (width + 0.004), 1, -dimension / 2], handed, metals);
@@ -179,12 +205,13 @@ export function createDoorScene(host: HTMLElement, options: SceneOptions) {
       for (const handle of door.handles) handle.rotation.z = handlePressed ? -0.22 : 0;
       if (door.latch) door.latch.position.z = (index === 1 ? secondAngle : angle) < 0.5 && !handlePressed ? 0.0027 : -0.001;
     });
+    for (const mechanism of hingeMechanisms) mechanism.update();
     setView(view, false);
     render();
   }
   function setView(next: SceneView, redraw = true) {
     view = next;
-    room.visible = wall.visible = view === 'room';
+    room.visible = view === 'room' || mirrored; wall.visible = view === 'room';
     const door = doors[0], handed = door.hinge === 'left' ? 1 : -1;
     if (view === 'room') resize();
     else {
@@ -218,6 +245,9 @@ export function createDoorScene(host: HTMLElement, options: SceneOptions) {
     leafMat.map = finish === 'wood' ? woodTexture : finish === 'mirror' ? null : stoneTexture;
     leafMat.roughness = finish === 'mirror' ? 0.055 : finish === 'wood' ? 0.68 : 0.82;
     leafMat.metalness = finish === 'mirror' ? 1 : 0;
+    mirrored = finish === 'mirror';
+    for (const mirror of mirrors) mirror.visible = mirrored;
+    room.visible = view === 'room' || mirrored;
     leafMat.needsUpdate = true; render();
   }
   function setExploded(value: number) {
@@ -241,6 +271,7 @@ export function createDoorScene(host: HTMLElement, options: SceneOptions) {
         for (const material of materials) material.dispose();
       }
     });
+    for (const mirror of mirrors) mirror.dispose();
     for (const tex of textures) tex.dispose(); environment.dispose();
     renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove();
   }

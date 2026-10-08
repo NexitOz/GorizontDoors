@@ -16,7 +16,7 @@ const detailViews: { id: SceneView; label: string; title: string; caption: strin
   { id: 'edge', label: 'Кромка', title: 'Кромка полотна', caption: 'Цвет кромки соответствует выбранному профилю. Планка замка остаётся сатиновой.' },
   { id: 'lock', label: 'Замок', title: 'Магнитный замок', caption: 'Планка с винтами находится на торце полотна. При открытой двери магнитный язычок утоплен.' },
   { id: 'handle', label: 'Ручка', title: 'Сатиновая ручка', caption: 'Изогнутый рычаг на квадратной розетке. При нажатии движется ручка, розетка закреплена на полотне.' },
-  { id: 'hinge', label: 'Петли', title: 'Скрытая петля', caption: 'Скрытая петля соединяет короб и полотно. Иллюстративная схема узла.' },
+  { id: 'hinge', label: 'Петли', title: 'Скрытая петля', caption: 'Округлые накладки утоплены в короб и полотно. Подвижные рычаги соединяют обе части при открывании.' },
 ];
 function saved(id: string, mode: OpeningMode, finish: Finish): Stored {
   if (cache.has(id)) return cache.get(id)!;
@@ -200,9 +200,13 @@ function FallbackDoor({ angle, mode, hinge, profile, finish, view = 'room' }: { 
   const inward = hinge === 'left' ? -1 : 1, edgeWidth = mode === 'revers' ? 7 : 5;
   const close = view === 'lock' || view === 'handle';
   return <svg viewBox="0 0 300 300" aria-label="Схема двери, кромки и фурнитуры">
-    <defs><linearGradient id={steel} x1="0" y1="0" x2="1" y2="1"><stop stopColor="#f1f3f3" /><stop offset=".35" stopColor="#9da7ac" /><stop offset=".55" stopColor="#e3e7e8" /><stop offset="1" stopColor="#737e85" /></linearGradient></defs>
+    <defs><linearGradient id={steel} x1="0" y1="0" x2="1" y2="1"><stop stopColor="#f1f3f3" /><stop offset=".35" stopColor="#9da7ac" /><stop offset=".55" stopColor="#e3e7e8" /><stop offset="1" stopColor="#737e85" /></linearGradient><pattern id={`${steel}-mirror`} width="1" height="1" patternContentUnits="objectBoundingBox"><rect width="1" height="1" fill="#d4d9d9" /><path d="M0 .68L1 .59V1H0" fill="#b2a996" /><rect x=".1" y=".13" width=".46" height=".42" fill="#eff8ff" /><path d="M.33 .13v.42M.1 .34h.46" stroke="#7c898e" strokeWidth=".015" /><path d="M.58 .65h.4v.03h-.4zM.62 .68v.19M.94 .68v.15" fill="#99744e" stroke="#99744e" strokeWidth=".015" /><path d="M0 .05L.5 0 1 .85.7 1" fill="white" opacity=".12" /></pattern></defs>
     <rect width="300" height="300" fill="#d8d0c2" />
-    {close ? <>
+    {view === 'hinge' ? <>
+      <path d="M0 0h125v300H0zM177 0h123v300H177z" fill={profile} />
+      {[90, 182].map(x => <g key={x}><rect x={x - 20} y="35" width="40" height="230" rx="20" fill={`url(#${steel})`} stroke="#707b80" /><rect x={x - 17} y="112" width="34" height="76" rx="3" fill="#232a2d" />{[59, 241].map(y => <g key={y}><circle cx={x} cy={y} r="5" fill="#adb8bd" /><path d={`M${x - 3} ${y}h6m-3-3v6`} stroke="#566167" /></g>)}</g>)}
+      {[121, 146, 171].map(y => <path key={y} d={`M88 ${y}q20-12 46 2l30 4 21-8v16l-21 8-30-4q-26-15-46-2z`} fill={`url(#${steel})`} stroke="#7d898f" />)}
+    </> : close ? <>
       <path d="M90 0h210v300H90z" fill={finishColors[finish]} />
       <path d="M56 0h34v300H56z" fill={profile} />
       <rect x="66" y="29" width="15" height="240" rx="7" fill={`url(#${steel})`} stroke="#677279" strokeWidth=".7" />
@@ -214,7 +218,7 @@ function FallbackDoor({ angle, mode, hinge, profile, finish, view = 'room' }: { 
     </> : <>
       <rect x="84" y="42" width="132" height="211" fill={profile} />
       <rect x="87" y="45" width="126" height="205" fill="#625b4e" />
-      <polygon points={`${pivot},45 ${x},${top} ${x},${bottom} ${pivot},250`} fill={finishColors[finish]} stroke={profile} strokeWidth="1.5" />
+      <polygon points={`${pivot},45 ${x},${top} ${x},${bottom} ${pivot},250`} fill={finish === 'mirror' ? `url(#${steel}-mirror)` : finishColors[finish]} stroke={profile} strokeWidth="1.5" />
       <polygon points={`${x},${top} ${x + inward * edgeWidth},${top + 1} ${x + inward * edgeWidth},${bottom - 1} ${x},${bottom}`} fill={profile} />
       {angle > 6 && <rect x={x + inward * edgeWidth / 2 - 1.5} y="143" width="3" height="29" rx="1.3" fill={`url(#${steel})`} />}
       <rect x={x + inward * 10 - 3.3} y="158" width="6.6" height="7" rx=".4" fill={`url(#${steel})`} />
