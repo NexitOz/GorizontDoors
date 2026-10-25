@@ -9,6 +9,7 @@ import { signedRotation } from '../../core/door';
 
 export type SceneOptions = { mode: OpeningMode; hinge: HingeSide; finish: Finish; profile: string; double?: boolean; exploded?: number };
 export type SceneView = 'room' | 'edge' | 'lock' | 'handle' | 'hinge';
+const roomCameraZ = { regular: 4.65, narrow: 5.2 };
 export function createDoorScene(host: HTMLElement, options: SceneOptions) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#d7d0c3');
@@ -113,18 +114,22 @@ export function createDoorScene(host: HTMLElement, options: SceneOptions) {
   const hingeMechanisms: ReturnType<typeof addConcealedHinge>[] = [];
   let mirrored = options.finish === 'mirror';
   // Furnish the viewer's side too: this is what a closed mirror actually sees.
-  box(room, [7, 3.2, 0.1], [0, 1.6, 3.4], plaster);
-  box(room, [0.1, 3.2, 6], [-3.1, 1.6, 0.3], plaster);
-  box(room, [0.1, 3.2, 6], [3.1, 1.6, 0.3], plaster);
+  // Keep this entire backdrop behind both viewing cameras. A wall between the
+  // camera and the leaf hides the door as soon as the loading preview clears.
+  const viewerBackZ = Math.max(roomCameraZ.regular, roomCameraZ.narrow) + 1.2;
+  const sideDepth = viewerBackZ + 2.6, sideZ = (viewerBackZ - 2.8) / 2;
+  box(room, [7, 3.2, 0.1], [0, 1.6, viewerBackZ], plaster);
+  box(room, [0.1, 3.2, sideDepth], [-3.1, 1.6, sideZ], plaster);
+  box(room, [0.1, 3.2, sideDepth], [3.1, 1.6, sideZ], plaster);
   const windowMat = new THREE.MeshBasicMaterial({ color: '#e5eff3' });
-  box(room, [1.4, 1.65, 0.025], [-0.65, 1.86, 3.33], dark);
-  box(room, [1.30, 1.55, 0.028], [-0.65, 1.86, 3.31], windowMat);
-  box(room, [0.035, 1.55, 0.04], [-0.65, 1.86, 3.28], dark);
-  box(room, [1.3, 0.035, 0.04], [-0.65, 1.86, 3.28], dark);
-  box(room, [1.45, 0.07, 0.40], [1.35, 0.76, 3.05], warm);
-  for (const x of [0.75, 1.95]) box(room, [0.045, 0.72, 0.045], [x, 0.38, 3.05], dark);
-  box(room, [0.46, 0.66, 0.028], [1.36, 1.53, 3.31], dark);
-  box(room, [0.39, 0.59, 0.03], [1.36, 1.53, 3.29], warm);
+  box(room, [1.4, 1.65, 0.025], [-0.65, 1.86, viewerBackZ - 0.07], dark);
+  box(room, [1.30, 1.55, 0.028], [-0.65, 1.86, viewerBackZ - 0.09], windowMat);
+  box(room, [0.035, 1.55, 0.04], [-0.65, 1.86, viewerBackZ - 0.12], dark);
+  box(room, [1.3, 0.035, 0.04], [-0.65, 1.86, viewerBackZ - 0.12], dark);
+  box(room, [1.45, 0.07, 0.40], [1.35, 0.76, viewerBackZ - 0.35], warm);
+  for (const x of [0.75, 1.95]) box(room, [0.045, 0.72, 0.045], [x, 0.38, viewerBackZ - 0.35], dark);
+  box(room, [0.46, 0.66, 0.028], [1.36, 1.53, viewerBackZ - 0.09], dark);
+  box(room, [0.39, 0.59, 0.03], [1.36, 1.53, viewerBackZ - 0.11], warm);
   const doors: { pivot: THREE.Group; handles: THREE.Group[]; hinge: HingeSide; width: number; latch: THREE.Mesh | undefined; body: THREE.Mesh; lockX: number }[] = [];
   const hits: THREE.Object3D[] = [];
   const dimension = options.mode === 'revers' ? demoGeometry.reversThickness : demoGeometry.aversThickness;
@@ -180,7 +185,7 @@ export function createDoorScene(host: HTMLElement, options: SceneOptions) {
     camera.aspect = width / height;
     renderer.setSize(width, height, false);
     if (view === 'room') {
-      camera.position.set(1.0, 1.6, camera.aspect < 0.75 ? 5.2 : 4.65);
+      camera.position.set(1.0, 1.6, camera.aspect < 0.75 ? roomCameraZ.narrow : roomCameraZ.regular);
       camera.lookAt(-0.04, 1.16, -0.22);
     }
     camera.updateProjectionMatrix();

@@ -29,6 +29,20 @@ const track = page => {
 };
 async function photo(page, filename) { await page.screenshot({ path: path.join(output, filename + '.webp'), type: 'webp', quality: 78 }); }
 async function settle(page) { await page.waitForFunction(() => !document.querySelector('.book-stage.turning')); await page.evaluate(() => document.fonts.ready); }
+async function visibleDoors(page) {
+  for (const canvas of await page.locator('.scene-host canvas').all()) {
+    const pixels = await canvas.evaluate(source => {
+      const copy = document.createElement('canvas'); copy.width = source.width; copy.height = source.height;
+      const context = copy.getContext('2d'); context.drawImage(source, 0, 0);
+      const data = context.getImageData(0, 0, copy.width, copy.height).data;
+      let dark = 0;
+      for (let i = 0; i < data.length; i += 4) if (Math.max(data[i], data[i + 1], data[i + 2]) < 120 && data[i + 3] > 0) dark++;
+      return { dark, total: copy.width * copy.height };
+    });
+    // An initialized canvas can still show only the beige back of a wall.
+    assert.ok(pixels.dark > Math.max(10, pixels.total * 0.0003), `Door details must be rendered, got ${JSON.stringify(pixels)}`);
+  }
+}
 async function angle(page, name, value) {
   const slider = page.getByRole('slider', { name, exact: true });
   await slider.evaluate((input, value) => {
@@ -51,6 +65,7 @@ try {
   assert.equal(await page.locator('article[data-page="2"]').count(), 1); assert.equal(await page.locator('article[data-page="3"]').count(), 1);
   await page.waitForSelector('[data-testid="scene-compare-avers"] canvas');
   await page.waitForSelector('[data-testid="scene-compare-revers"] canvas');
+  await visibleDoors(page);
   await page.getByRole('button', { name: 'Открыть', exact: true }).first().click();
   await page.waitForFunction(() => Number(document.querySelector('[data-testid="scene-compare-avers"]').dataset.angle) > 70);
   await angle(page, 'Угол открытия Revers', 60);
@@ -63,6 +78,7 @@ try {
   await page.getByRole('button', { name: 'Назад' }).click(); await settle(page);
   assert.ok(Math.abs(Number(await page.getByTestId('scene-invisible').getAttribute('data-angle')) - 60) < 1);
   assert.equal(await page.locator('article[data-page="4"]').getByRole('button', { name: 'GOLD', exact: true }).getAttribute('aria-pressed'), 'true');
+  await visibleDoors(page);
   pass('Angle and selected profile survive page changes');
   await page.locator('article[data-page="4"]').getByRole('button', { name: 'Поменять сторону петель' }).click();
   assert.equal(await page.getByTestId('scene-invisible').getAttribute('data-hinge'), 'right');
@@ -84,7 +100,7 @@ try {
     await phone.waitForSelector('article[data-page="' + n + '"]');
     assert.equal(await phone.locator('article').count(), 1);
     assert.ok(await phone.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-    if ([3, 4, 5, 6, 7].includes(n)) await phone.waitForSelector('canvas');
+    if ([3, 4, 5, 6, 7].includes(n)) { await phone.waitForSelector('canvas'); await visibleDoors(phone); }
     await photo(phone, 'mobile-page-' + String(n).padStart(2, '0'));
   }
   pass('All 11 mobile pages, real HTML and no horizontal overflow');
